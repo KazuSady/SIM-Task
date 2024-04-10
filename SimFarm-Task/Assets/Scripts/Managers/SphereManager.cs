@@ -1,10 +1,6 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Numerics;
 using UnityEngine;
-using UnityEngine.Serialization;
-using Quaternion = UnityEngine.Quaternion;
 using Vector3 = UnityEngine.Vector3;
 
 public class SphereManager : MonoBehaviour
@@ -12,112 +8,160 @@ public class SphereManager : MonoBehaviour
     public static SphereManager Instance;
     public GameObject sphere;
 
-    [SerializeField] private Material _changingColorMaterial;
+    [SerializeField] private Material changingColorMaterial;
+    [SerializeField] private ParticleSystem fireworks;
+    
+    //Center
+    [SerializeField] private Vector3 center = new (0.0f, 0.0f, 0.0f);
+    
+    //For movement
+    [SerializeField] private float maxRotateSpeed = 200.0f;
+    [SerializeField] private float approachSpeed = 0.5f;
+    [SerializeField] private float timeToAccelerate = 3.0f;
+    [SerializeField] private float shrinkRate = 0.1f;
+    
     private float _distance = 0;
     private Vector3 _previousPosition;
+    private bool _hasParticlesSystemFired = false;
 
     //Sphere's components
     private Renderer _sphereRenderer;
-    
-    //Center
-    [SerializeField] private Vector3 _center = new (0.0f, 0.0f, 0.0f);
-    
-    //For movement
-    [FormerlySerializedAs("_rotateSpeed")] [FormerlySerializedAs("_movementSpeed")] [SerializeField] private float _maxRotateSpeed = 200.0f;
-    [FormerlySerializedAs("_radialSpeed")] [SerializeField] private float _approachSpeed = 0.5f;
-    [SerializeField] private float _timeToAccelerate = 3.0f;
     private float _actualSpeed = 0.0f;
     private float _acceleration = 0.0f;
 
-    public void Awake()
+    private bool _sphereStopInProgress;
+
+    public bool IsSphereGenerated()
     {
-        Instance = this;
+        return sphere;
     }
     
-    void FixedUpdate()
+    public void StopSphere()
     {
-        if (sphere != null)
+        if (_sphereStopInProgress)
         {
-            if (sphere.transform.position != _center)
-            {
-                _actualSpeed += _acceleration * Time.deltaTime;
-                if (_actualSpeed > _maxRotateSpeed)
-                {
-                    _actualSpeed = _maxRotateSpeed;
-                }
-                MoveSphere();
-                //Calculating distance travelled from the start
-                _distance += Vector3.Distance(sphere.transform.position, _previousPosition);
-                _previousPosition = sphere.transform.position;
-            }
-            else
-            {
-                if (sphere.transform.localScale != new Vector3(0.0f, 0.0f, 0.0f))
-                {
-                    sphere.transform.localScale -= new Vector3(0.1f, 0.1f, 0.1f);
-                }
-                else
-                {
-                    
-                }
-            }
+            return;
         }
+        
+        StartCoroutine(SphereWait());
+        UIManager.Instance.WriteDistance(_distance);
     }
-
+    
     public void CreateSphere()
     {
         if (sphere != null)
         {
-            Destroy(sphere);
-            _distance = 0;
-            _actualSpeed = 0;
+            DestroySphere();
         }
+
+        _hasParticlesSystemFired = false;
+        StopAllCoroutines();
+        
         //Calculating acceleration needed to reach designed speed in given time
-        _acceleration = (_maxRotateSpeed - 0.0f) / _timeToAccelerate;
+        _acceleration = (maxRotateSpeed - 0.0f) / timeToAccelerate;
         
         sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         sphere.transform.position = new Vector3(-5.0f, 0.0f, 0.0f);
         _previousPosition = sphere.transform.position;
         _sphereRenderer = sphere.GetComponent<Renderer>();
-        _sphereRenderer.material = _changingColorMaterial;
+        _sphereRenderer.material = changingColorMaterial;
+    }
+    
+    public void Awake()
+    {
+        // Singleton pattern
+        if (Instance)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        
+        Instance = this;
     }
 
-    public void MoveSphere()
+    private void Update()
     {
-        sphere.transform.LookAt(_center);
+        if (!sphere)
+        {
+            return;
+        }
+        
+        Vector3 sPosition = sphere.transform.position;
+        float sPosX = sPosition.x;
+        float sPosY = sPosition.y;
+        float sPosZ = sPosition.z;
+        float epsilon = 0.0001f;
+
+        if (!(Math.Abs(sPosX - center.x) < epsilon && 
+              Math.Abs(sPosY - center.y) < epsilon &&
+              Math.Abs(sPosZ - center.z) < epsilon))
+        {
+            _actualSpeed += _acceleration * Time.deltaTime;
+            if (_actualSpeed > maxRotateSpeed)
+            {
+                _actualSpeed = maxRotateSpeed;
+            }
+            MoveSphere();
+            //Calculating distance travelled from the start
+            _distance += Vector3.Distance(sPosition, _previousPosition);
+            _previousPosition = sPosition;
+        }
+        else
+        {
+            // When the sphere reaches the center
+            sphere.transform.localScale -= sphere.transform.localScale * (shrinkRate * Time.deltaTime);
+
+            if (sphere.transform.localScale.sqrMagnitude > 0.01f)
+            {
+                return;
+            }
+            
+            if (_hasParticlesSystemFired)
+            {
+                return;
+            }
+            
+            StartCoroutine(ParticleWait());
+            _hasParticlesSystemFired = true;
+        }
+    }
+
+    private void MoveSphere()
+    {
+        sphere.transform.LookAt(center);
         //For getting closer to the center
-        sphere.transform.Translate(transform.forward * Time.deltaTime * _approachSpeed);
+        sphere.transform.Translate(transform.forward * (Time.deltaTime * approachSpeed));
         //For rotating around the center
-        sphere.transform.RotateAround(_center, Vector3.forward,_actualSpeed * Time.deltaTime);
+        sphere.transform.RotateAround(center, Vector3.forward,_actualSpeed * Time.deltaTime);
     }
 
-    public void StopSphere()
-    {
-        StartCoroutine(SphereWait());
-        UIManager.Instance.WriteDistance(_distance);
-    }
-
-    IEnumerator SphereWait()
+    private IEnumerator SphereWait()
     {
         //Remember speeds in tmp variables and set them 0
-        float tmpApproach = _approachSpeed;
-        float tmpRotate = _maxRotateSpeed;
-        _maxRotateSpeed = 0;
-        _approachSpeed = 0;
+        _sphereStopInProgress = true;
+        float tmpApproach = approachSpeed;
+        float tmpRotate = maxRotateSpeed;
+        maxRotateSpeed = 0;
+        approachSpeed = 0;
         //Wait for 5 seconds
-        yield return new WaitForSeconds(5);
+        yield return new WaitForSeconds(5.0f);
         //Return previous speeds' values
-        _maxRotateSpeed = tmpRotate;
-        _approachSpeed = tmpApproach;
+        _sphereStopInProgress = false;
+        maxRotateSpeed = tmpRotate;
+        approachSpeed = tmpApproach;
+    }
+    
+    private IEnumerator ParticleWait()
+    {
+        fireworks.Play(false);
+        yield return new WaitForSeconds(5.0f);
+        DestroySphere();
     }
 
-    public bool IsSphereGenerated()
+    private void DestroySphere()
     {
-        if (sphere != null)
-        {
-            return true;
-        }
-
-        return false;
+        Destroy(sphere);
+        _distance = 0;
+        _actualSpeed = 0;
     }
 }

@@ -1,18 +1,21 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class UIManager : MonoBehaviour
 {
     public static UIManager Instance;
 
-    [SerializeField] private TextMeshProUGUI _textDistance;
+    [SerializeField] private TextMeshProUGUI textDistance;
 
     private void Awake()
     {
+        if (Instance)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        
         Instance = this;
     }
 
@@ -23,6 +26,6 @@ public class UIManager : MonoBehaviour
 
     public void WriteDistance(float distance)
     {
-        _textDistance.text = "Distance: " + Math.Round(distance,2);
+        textDistance.text = "Distance: " + Math.Round(distance,2);
     }
 }
