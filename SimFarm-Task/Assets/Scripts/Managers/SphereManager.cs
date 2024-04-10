@@ -11,9 +11,10 @@ public class SphereManager : MonoBehaviour
     public static SphereManager Instance;
     public GameObject sphere;
 
+    [SerializeField] private Material _changingColorMaterial; 
+
     //Sphere's components
     private Renderer _sphereRenderer;
-    private Rigidbody _sphereRigidbody;
     
     //Center
     [SerializeField] private Vector3 _center = new (0.0f, 0.0f, 0.0f);
@@ -39,23 +40,46 @@ public class SphereManager : MonoBehaviour
         if (sphere != null && sphere.transform.position != _center)
         {
             MoveSphere();
-            _sphereRenderer.material.color = new Color(Random.Range(0.0f, 1.0f), 0.5f, 0.0f);
         }
     }
 
     public void CreateSphere()
     {
+        if (sphere != null)
+        {
+            Destroy(sphere);
+        }
         sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        _sphereRigidbody = sphere.AddComponent<Rigidbody>();
-        _sphereRigidbody.useGravity = false;
         sphere.transform.position = new Vector3(-5.0f, 0.0f, 0.0f);
         _sphereRenderer = sphere.GetComponent<Renderer>();
+        _sphereRenderer.material = _changingColorMaterial;
     }
 
     public void MoveSphere()
     {
         sphere.transform.LookAt(_center);
+        //For getting closer to the center
         sphere.transform.Translate(transform.forward * Time.deltaTime * _approachSpeed);
+        //For rotating around the center
         sphere.transform.RotateAround(_center, Vector3.forward,_rotateSpeed * Time.deltaTime);
+    }
+
+    public void StopSphere()
+    {
+        StartCoroutine(SphereWait());
+    }
+
+    IEnumerator SphereWait()
+    {
+        //Remember speeds in tmp variables and set them 0
+        float tmpApproach = _approachSpeed;
+        float tmpRotate = _rotateSpeed;
+        _rotateSpeed = 0;
+        _approachSpeed = 0;
+        //Wait for 5 seconds
+        yield return new WaitForSeconds(5);
+        //Return previous speeds' values
+        _rotateSpeed = tmpRotate;
+        _approachSpeed = tmpApproach;
     }
 }

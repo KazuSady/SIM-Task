@@ -13,15 +13,17 @@ public class GameManager : MonoBehaviour
         Instance = this;
     }
 
-    // Start is called before the first frame update
-    void Start()
-    {
-        SphereManager.Instance.CreateSphere();
-    }
-
     // Update is called once per frame
     void Update()
     {
-        
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            SphereManager.Instance.StopSphere();
+        }
+    }
+
+    public void SphereBegin()
+    {
+        SphereManager.Instance.CreateSphere();
     }
 }
